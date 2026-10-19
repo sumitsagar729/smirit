@@ -18,6 +18,18 @@ rusqlite_migration.workspace = true
 tracing.workspace = true
 specta.workspace = true
 specta-typescript.workspace = true
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp", "tiff", "rayon"] }
+walkdir = "2"
+nom-exif = "3.8"
+regex = "1"
+crossbeam-channel = "0.5"
+fast_image_resize = { version = "6", features = ["image"] }
+webp = "0.3"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+imagesize = "0.14"
+jpeg-decoder = { version = "0.3", default-features = false }
+bytes = "1"
 
 [dev-dependencies]
 tempfile.workspace = true
+walkdir = "2"

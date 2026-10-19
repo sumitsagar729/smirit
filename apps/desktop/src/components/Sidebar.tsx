@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import type { ComponentType } from 'react'
 
 import { cn } from '../lib/cn'
-import { useStats } from '../lib/queries'
+import { useIndexStatus, useStats } from '../lib/queries'
 import { useNav, type View } from '../state/nav'
 import { Logo } from './Logo'
 import { Kbd } from './ui/Kbd'
@@ -60,16 +60,41 @@ function Section({ title, items }: { title: string; items: Item[] }) {
 
 function LibraryStatus() {
   const { data } = useStats()
+  const index = useIndexStatus()
   const total = (data?.photos ?? 0) + (data?.videos ?? 0)
+  const busy = index.phase !== 'idle'
+  const pct = index.total ? Math.round(((index.done + index.failed) / index.total) * 100) : 0
+
+  const title = busy
+    ? index.phase === 'scanning'
+      ? 'Checking folders…'
+      : `Indexing ${pct}%`
+    : data?.sources
+      ? 'Library up to date'
+      : 'No folders yet'
+
   return (
-    <div className="rounded-xl border border-border bg-surface px-3 py-2.5">
+    <div className="rounded-xl border border-border bg-surface px-3 py-2.5" aria-live="polite">
       <div className="flex items-center gap-2 text-[12.5px] font-medium text-text">
-        <span className={cn('size-1.5 rounded-full', data?.sources ? 'bg-success' : 'bg-faint')} />
-        {data?.sources ? 'Library up to date' : 'No folders yet'}
+        <span
+          className={cn('size-1.5 rounded-full', busy ? 'animate-pulse bg-accent' : data?.sources ? 'bg-success' : 'bg-faint')}
+        />
+        {title}
       </div>
-      <div className="mt-0.5 text-[12px] text-muted">
-        {total.toLocaleString()} items · {data?.sources ?? 0} {data?.sources === 1 ? 'folder' : 'folders'}
-      </div>
+      {index.phase === 'indexing' ? (
+        <>
+          <div className="mt-2 h-1 overflow-hidden rounded-full bg-hover">
+            <div className="h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${pct}%` }} />
+          </div>
+          <div className="mt-1.5 text-[12px] text-muted tabular-nums">
+            {(index.done + index.failed).toLocaleString()} of {index.total.toLocaleString()}
+          </div>
+        </>
+      ) : (
+        <div className="mt-0.5 text-[12px] text-muted">
+          {total.toLocaleString()} items · {data?.sources ?? 0} {data?.sources === 1 ? 'folder' : 'folders'}
+        </div>
+      )}
     </div>
   )
 }

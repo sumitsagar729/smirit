@@ -1,11 +1,11 @@
-import { Folder, FolderPlus, HardDrive, Trash2 } from 'lucide-react'
+import { Folder, FolderPlus, HardDrive, RefreshCw, Trash2 } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useState } from 'react'
 
 import { PageHeader } from '../components/PageHeader'
 import { Button } from '../components/ui/Button'
 import type { Source } from '../lib/api'
-import { useAddFolder, useRemoveFolder, useSources } from '../lib/queries'
+import { useAddFolder, useIndexStatus, useRemoveFolder, useRescan, useSources } from '../lib/queries'
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
@@ -38,7 +38,11 @@ function SourceRow({ source }: { source: Source }) {
           {source.photos.toLocaleString()} photos · {source.videos.toLocaleString()} videos
         </div>
         <div>
-          {source.lastScanAt ? `Scanned ${formatDate(source.lastScanAt)}` : `Added ${formatDate(source.addedAt)}`}
+          {!source.isOnline
+            ? 'Drive not connected'
+            : source.lastScanAt
+              ? `Checked ${formatDate(source.lastScanAt)}`
+              : `Added ${formatDate(source.addedAt)}`}
         </div>
       </div>
       {confirming ? (
@@ -67,6 +71,8 @@ function SourceRow({ source }: { source: Source }) {
 export function FoldersView() {
   const { data: sources = [] } = useSources()
   const addFolder = useAddFolder()
+  const rescan = useRescan()
+  const busy = useIndexStatus().phase !== 'idle'
 
   return (
     <div className="h-full overflow-y-auto">
@@ -74,9 +80,20 @@ export function FoldersView() {
         title="Folders"
         subtitle="Smriti only reads these folders. Your original files are never changed, moved or uploaded."
         actions={
-          <Button variant="primary" icon={<FolderPlus size={16} />} onClick={() => addFolder.mutate()}>
-            Add folder
-          </Button>
+          <>
+            {sources.length > 0 && (
+              <Button
+                icon={<RefreshCw size={15} className={busy ? 'animate-spin' : undefined} />}
+                onClick={() => rescan.mutate()}
+                disabled={busy}
+              >
+                {busy ? 'Checking…' : 'Check for new photos'}
+              </Button>
+            )}
+            <Button variant="primary" icon={<FolderPlus size={16} />} onClick={() => addFolder.mutate()}>
+              Add folder
+            </Button>
+          </>
         }
       />
       <div className="px-10 pb-10">

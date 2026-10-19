@@ -1,24 +1,35 @@
 //! Desktop shell: wires the Smriti core into Tauri commands for the UI.
 
 mod commands;
+mod indexing;
 mod paths;
+mod protocol;
+
+use std::sync::Arc;
 
 use smriti_core::Library;
-use tauri::Manager;
+use tauri::{Manager, RunEvent};
 
 pub struct AppState {
-    pub library: Library,
+    pub library: Arc<Library>,
+    pub indexer: indexing::Indexer,
 }
 
 /// Builds the typed command set; also used to export TypeScript bindings.
 pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
-    tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
-        commands::app_info,
-        commands::library_stats,
-        commands::list_sources,
-        commands::add_source,
-        commands::remove_source,
-    ])
+    tauri_specta::Builder::<tauri::Wry>::new()
+        .commands(tauri_specta::collect_commands![
+            commands::app_info,
+            commands::library_stats,
+            commands::list_sources,
+            commands::add_source,
+            commands::remove_source,
+            commands::rescan,
+            commands::index_status,
+            commands::timeline,
+            commands::asset_detail,
+        ])
+        .typ::<indexing::IndexStatus>()
 }
 
 /// Writes `src/lib/bindings.ts` (paths relative to the `src-tauri` crate).
@@ -41,16 +52,29 @@ pub fn run() {
     #[cfg(debug_assertions)]
     export_bindings(&builder);
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(builder.invoke_handler())
+        .register_asynchronous_uri_scheme_protocol("smriti", |ctx, req, responder| {
+            let app = ctx.app_handle().clone();
+            std::thread::spawn(move || responder.respond(protocol::handle(&app, req)));
+        })
         .setup(move |app| {
             builder.mount_events(app);
-            let library = Library::open(&library_dir)?;
-            app.manage(AppState { library });
+            let library = Arc::new(Library::open(&library_dir)?);
+            let indexer = indexing::Indexer::start(app.handle().clone(), library.clone());
+            app.manage(AppState { library, indexer });
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Smriti");
+        .build(tauri::generate_context!())
+        .expect("error while building Smriti");
+
+    app.run(|app, event| {
+        if let RunEvent::Exit = event
+            && let Some(state) = app.try_state::<AppState>()
+        {
+            state.indexer.shutdown();
+        }
+    });
 }

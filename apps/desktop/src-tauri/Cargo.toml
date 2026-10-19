@@ -30,3 +30,4 @@ tauri-plugin-dialog = "2.8"
 tauri-plugin-opener = "2.7"
 tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
 specta-typescript.workspace = true
+crossbeam-channel = "0.5"

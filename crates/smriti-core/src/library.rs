@@ -2,20 +2,25 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
-use rusqlite::Connection;
+use rusqlite::{Connection, OpenFlags};
 use serde::Serialize;
 
-use crate::Result;
 use crate::migrations::{MIGRATIONS, latest_version};
+use crate::{Result, thumbs};
 
 const DB_FILE: &str = "library.db";
 const SUBDIRS: [&str; 4] = ["thumbs", "faces", "models", "backups"];
 const KEEP_BACKUPS: usize = 7;
 
 /// An open Smriti library: one SQLite database plus caches in `root`.
+///
+/// Two connections: `writer` for the indexer and edits, `reader` for the UI,
+/// so browsing never waits behind indexing (WAL allows both at once).
 pub struct Library {
     root: PathBuf,
-    conn: Mutex<Connection>,
+    writer: Mutex<Connection>,
+    reader: Mutex<Connection>,
+    ffmpeg: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -50,31 +55,44 @@ impl Library {
             backup(&conn, &root, &format!("pre-v{}", latest_version()))?;
         }
         MIGRATIONS.to_latest(&mut conn)?;
-        tracing::info!(root = %root.display(), from = current, to = latest_version(), "library opened");
+        // Jobs left "running" by a crash or forced quit go back in the queue.
+        conn.execute("UPDATE jobs SET state = 'queued' WHERE state = 'running'", [])?;
 
-        Ok(Self { root, conn: Mutex::new(conn) })
-    }
+        let reader = Connection::open_with_flags(
+            &db_path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX | OpenFlags::SQLITE_OPEN_URI,
+        )?;
+        reader.busy_timeout(std::time::Duration::from_secs(5))?;
 
-    /// Opens a throwaway in-memory library (tests).
-    pub fn open_in_memory(root: impl AsRef<Path>) -> Result<Self> {
-        let mut conn = Connection::open_in_memory()?;
-        configure(&conn)?;
-        MIGRATIONS.to_latest(&mut conn)?;
-        Ok(Self { root: root.as_ref().to_path_buf(), conn: Mutex::new(conn) })
+        let ffmpeg = thumbs::find_ffmpeg();
+        tracing::info!(root = %root.display(), from = current, to = latest_version(), ffmpeg = ?ffmpeg, "library opened");
+        Ok(Self { root, writer: Mutex::new(conn), reader: Mutex::new(reader), ffmpeg })
     }
 
     pub fn root(&self) -> &Path {
         &self.root
     }
 
+    pub fn thumbs_dir(&self) -> PathBuf {
+        self.root.join("thumbs")
+    }
+
+    pub fn ffmpeg(&self) -> Option<&Path> {
+        self.ffmpeg.as_deref()
+    }
+
+    // A poisoned lock only means another thread panicked mid-query;
+    // SQLite itself stays consistent, so keep going.
     pub(crate) fn conn(&self) -> MutexGuard<'_, Connection> {
-        // A poisoned lock only means another thread panicked mid-query;
-        // SQLite itself stays consistent, so keep going.
-        self.conn.lock().unwrap_or_else(|e| e.into_inner())
+        self.writer.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub(crate) fn read(&self) -> MutexGuard<'_, Connection> {
+        self.reader.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     pub fn stats(&self) -> Result<LibraryStats> {
-        let conn = self.conn();
+        let conn = self.read();
         let count = |sql: &str| -> Result<u32> { Ok(conn.query_row(sql, [], |r| r.get(0))?) };
         Ok(LibraryStats {
             root: self.root.display().to_string(),

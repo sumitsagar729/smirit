@@ -2,6 +2,8 @@ import { AnimatePresence, motion } from 'motion/react'
 
 import { Sidebar } from './components/Sidebar'
 import { Toaster } from './components/Toaster'
+import { Viewer } from './components/Viewer'
+import { useIndexStatusSync } from './lib/queries'
 import { useNav, type View } from './state/nav'
 import { ComingSoonView } from './views/ComingSoonView'
 import { FoldersView } from './views/FoldersView'
@@ -27,6 +29,7 @@ function CurrentView({ view }: { view: View }) {
 
 export function App() {
   const view = useNav((s) => s.view)
+  useIndexStatusSync()
   return (
     <div className="flex h-full bg-bg">
       <Sidebar />
@@ -44,6 +47,7 @@ export function App() {
           </motion.div>
         </AnimatePresence>
       </main>
+      <Viewer />
       <Toaster />
     </div>
   )

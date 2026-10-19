@@ -2,10 +2,12 @@
 //! reach the UI as `{ code, message }`.
 
 use serde::Serialize;
+use smriti_core::timeline::{AssetDetail, Tile};
 use smriti_core::{Id, LibraryStats, Source};
 use tauri::State;
 
 use crate::AppState;
+use crate::indexing::IndexStatus;
 
 #[derive(Debug, Serialize, specta::Type)]
 pub struct ApiError {
@@ -57,11 +59,40 @@ pub fn list_sources(state: State<'_, AppState>) -> ApiResult<Vec<Source>> {
 #[tauri::command]
 #[specta::specta]
 pub fn add_source(state: State<'_, AppState>, path: String) -> ApiResult<Source> {
-    Ok(state.library.add_source(path)?)
+    let source = state.library.add_source(path)?;
+    state.indexer.wake();
+    Ok(source)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn remove_source(state: State<'_, AppState>, id: Id) -> ApiResult<()> {
     Ok(state.library.remove_source(id)?)
+}
+
+/// Re-checks every folder for new, changed or removed files.
+#[tauri::command]
+#[specta::specta]
+pub fn rescan(state: State<'_, AppState>) {
+    state.indexer.wake();
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn index_status(state: State<'_, AppState>) -> IndexStatus {
+    state.indexer.status()
+}
+
+/// Every visible photo and video, newest first. Async so the UI thread
+/// never waits on the database.
+#[tauri::command]
+#[specta::specta]
+pub async fn timeline(state: State<'_, AppState>) -> ApiResult<Vec<Tile>> {
+    Ok(state.library.timeline()?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn asset_detail(state: State<'_, AppState>, id: Id) -> ApiResult<AssetDetail> {
+    Ok(state.library.asset_detail(id)?)
 }

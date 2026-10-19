@@ -1,6 +1,17 @@
-import { type ApiError, type AppInfo, commands, type Id, type LibraryStats, type Source } from './bindings'
+import {
+  type ApiError,
+  type AppInfo,
+  type AssetDetail,
+  commands,
+  type Id,
+  type IndexStatus,
+  type LibraryStats,
+  type Source,
+  type Tile,
+} from './bindings'
+import { mock } from './mock'
 
-export type { ApiError, AppInfo, Id, LibraryStats, Source }
+export type { ApiError, AppInfo, AssetDetail, Id, IndexStatus, LibraryStats, Source, Tile }
 
 /** Thrown for any failed command; `code` is stable, `message` is human-readable. */
 export class CommandError extends Error {
@@ -28,46 +39,22 @@ const real = {
   listSources: () => unwrap(commands.listSources()),
   addSource: (path: string) => unwrap(commands.addSource(path)),
   removeSource: (id: Id) => unwrap(commands.removeSource(id)),
+  rescan: () => commands.rescan(),
+  indexStatus: () => commands.indexStatus(),
+  timeline: () => unwrap(commands.timeline()),
+  assetDetail: (id: Id) => unwrap(commands.assetDetail(id)),
 }
 
-// In-memory stand-in so every screen can be developed and reviewed in a browser.
-const mockSources: Source[] = []
-const mock: typeof real = {
-  appInfo: async () => ({ version: '0.1.0-preview', os: 'browser', arch: '' }),
-  libraryStats: async () => ({
-    root: 'C:\\Users\\you\\AppData\\Local\\Smriti',
-    schemaVersion: 1,
-    sources: mockSources.length,
-    photos: 0,
-    videos: 0,
-    people: 0,
-    pendingJobs: 0,
-  }),
-  listSources: async () => [...mockSources],
-  addSource: async (path) => {
-    if (mockSources.some((s) => s.path === path)) {
-      throw new CommandError({ code: 'source_already_added', message: `${path} is already part of the library` })
-    }
-    const s: Source = {
-      id: mockSources.length + 1,
-      path,
-      isOnline: true,
-      addedAt: new Date().toISOString(),
-      lastScanAt: null,
-      photos: 0,
-      videos: 0,
-    }
-    mockSources.push(s)
-    return s
-  },
-  removeSource: async (id) => {
-    const i = mockSources.findIndex((s) => s.id === id)
-    if (i >= 0) mockSources.splice(i, 1)
-    return null
-  },
-}
+export type Api = typeof real
 
-export const api = inTauri ? real : mock
+export const api: Api = inTauri ? real : mock
+
+/** Subscribes to indexing progress pushed by the core. */
+export async function onIndexStatus(cb: (s: IndexStatus) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<IndexStatus>('index-status', (e) => cb(e.payload))
+}
 
 /** Native folder picker; in a browser preview, asks for a path instead. */
 export async function pickFolder(): Promise<string | null> {
@@ -76,3 +63,16 @@ export async function pickFolder(): Promise<string | null> {
   const picked = await open({ directory: true, multiple: false, title: 'Add a photo folder' })
   return typeof picked === 'string' ? picked : null
 }
+
+export async function revealInExplorer(path: string) {
+  if (!inTauri) return
+  const { revealItemInDir } = await import('@tauri-apps/plugin-opener')
+  await revealItemInDir(path)
+}
+
+// The custom protocol is addressed differently per platform.
+const isWindows = typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent)
+const base = isWindows ? 'http://smriti.localhost' : 'smriti://localhost'
+
+export const thumbUrl = (id: Id) => `${base}/thumb/${id}`
+export const mediaUrl = (id: Id) => `${base}/media/${id}`

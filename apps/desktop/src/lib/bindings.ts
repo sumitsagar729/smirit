@@ -11,6 +11,15 @@ export const commands = {
 	listSources: () => typedError<Source[], ApiError>(__TAURI_INVOKE("list_sources")),
 	addSource: (path: string) => typedError<Source, ApiError>(__TAURI_INVOKE("add_source", { path })),
 	removeSource: (id: Id) => typedError<null, ApiError>(__TAURI_INVOKE("remove_source", { id })),
+	/**  Re-checks every folder for new, changed or removed files. */
+	rescan: () => __TAURI_INVOKE<void>("rescan"),
+	indexStatus: () => __TAURI_INVOKE<IndexStatus>("index_status"),
+	/**
+	 *  Every visible photo and video, newest first. Async so the UI thread
+	 *  never waits on the database.
+	 */
+	timeline: () => typedError<Tile[], ApiError>(__TAURI_INVOKE("timeline")),
+	assetDetail: (id: Id) => typedError<AssetDetail, ApiError>(__TAURI_INVOKE("asset_detail", { id })),
 };
 
 /* Types */
@@ -25,11 +34,40 @@ export type AppInfo = {
 	arch: string,
 };
 
+export type AssetDetail = {
+	id: Id,
+	kind: Kind,
+	path: string,
+	fileName: string,
+	folder: string,
+	mime: string | null,
+	sizeBytes: number | null,
+	takenAt: string | null,
+	takenAtSource: string | null,
+	width: number | null,
+	height: number | null,
+	camera: string | null,
+	lat: number | null,
+	lon: number | null,
+	duration: number | null,
+};
+
 /**
  *  Database row id. SQLite rowids are `i64`, but ours stay far below 2^53,
  *  so the UI receives them as plain JavaScript numbers without precision loss.
  */
 export type Id = number;
+
+export type IndexStatus = {
+	phase: Phase,
+	total: number,
+	done: number,
+	failed: number,
+	/**  Bumped whenever new items became visible, so the UI knows to refetch. */
+	generation: number,
+};
+
+export type Kind = "photo" | "video";
 
 export type LibraryStats = {
 	root: string,
@@ -41,6 +79,8 @@ export type LibraryStats = {
 	pendingJobs: number,
 };
 
+export type Phase = "idle" | "scanning" | "indexing";
+
 export type Source = {
 	id: Id,
 	path: string,
@@ -49,6 +89,22 @@ export type Source = {
 	lastScanAt: string | null,
 	photos: number,
 	videos: number,
+};
+
+/**
+ *  One grid cell. Kept tiny: the whole library is sent to the UI at once
+ *  (36k tiles â‰ˆ 2 MB) so scrolling and the year scrubber never wait.
+ */
+export type Tile = {
+	id: Id,
+	/**  Display aspect: width / height (1.0 until metadata is read). Never NaN. */
+	aspect: number | null,
+	/**  Local capture time `YYYY-MM-DDTHH:MM:SS`, or null until indexed. */
+	takenAt: string | null,
+	kind: Kind,
+	/**  Video length in seconds. */
+	duration: number | null,
+	hasThumb: boolean,
 };
 
 /* Tauri Specta runtime */

@@ -56,7 +56,7 @@ impl Library {
     }
 
     pub fn list_sources(&self) -> Result<Vec<Source>> {
-        let conn = self.conn();
+        let conn = self.read();
         let mut stmt = conn.prepare(&format!("{SELECT_SOURCE} GROUP BY s.id ORDER BY s.path"))?;
         let rows = stmt.query_map([], row_to_source)?;
         Ok(rows.collect::<Result<_, _>>()?)

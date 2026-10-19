@@ -5,10 +5,12 @@ use rusqlite_migration::{M, Migrations};
 /// Forward-only schema migrations, applied in order at start-up.
 /// Never edit a released migration; add a new file instead.
 pub static MIGRATIONS: LazyLock<Migrations<'static>> =
-    LazyLock::new(|| Migrations::new(vec![M::up(include_str!("../migrations/0001_initial.sql"))]));
+    LazyLock::new(|| Migrations::new(STEPS.iter().map(|sql| M::up(sql)).collect()));
+
+const STEPS: &[&str] = &[include_str!("../migrations/0001_initial.sql"), include_str!("../migrations/0002_thumbs.sql")];
 
 pub fn latest_version() -> u32 {
-    1
+    STEPS.len() as u32
 }
 
 #[cfg(test)]
