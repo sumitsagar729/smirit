@@ -1,0 +1,14 @@
+{
+  "name": "smriti",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "pnpm --filter @smriti/desktop tauri dev",
+    "build": "pnpm --filter @smriti/desktop tauri build",
+    "ui:dev": "pnpm --filter @smriti/desktop dev",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test && cargo test --workspace"
+  }
+}

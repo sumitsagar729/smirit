@@ -1,0 +1,37 @@
+[workspace]
+resolver = "3"
+members = ["crates/smriti-core", "apps/desktop/src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "UNLICENSED"
+repository = "https://github.com/sumitsagar/smriti"
+authors = ["Sumit Sagar"]
+
+[workspace.dependencies]
+smriti-core = { path = "crates/smriti-core" }
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+rusqlite = { version = "0.40", features = ["bundled", "chrono"] }
+rusqlite_migration = "2.6"
+directories = "6"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+specta = { version = "=2.0.0-rc.25", features = ["derive", "chrono"] }
+specta-typescript = "0.0.12"
+tempfile = "3"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = "debuginfo"
+
+# Image decoding and ML are painfully slow unoptimised; keep dev builds usable.
+[profile.dev.package."*"]
+opt-level = 2

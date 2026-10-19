@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Rust format
+        run: cargo fmt --all --check
+      - name: Rust lint
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Rust tests
+        run: cargo test -p smriti-core
+
+      - name: TypeScript bindings are up to date
+        shell: bash
+        run: |
+          cargo run -q -p smriti-desktop --bin export-bindings
+          git diff --exit-code apps/desktop/src/lib/bindings.ts
+
+      - name: UI typecheck, lint, tests
+        working-directory: apps/desktop
+        run: |
+          pnpm typecheck
+          pnpm lint
+          pnpm test

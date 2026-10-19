@@ -1,0 +1,115 @@
+@import 'tailwindcss';
+
+/*
+ * Smriti design tokens. Dark is the default; light follows the OS unless the
+ * user picks one in Settings (html[data-theme]).
+ */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #111113;
+  --surface: #17171a;
+  --elevated: #1e1e22;
+  --hover: #26262b;
+  --border: #2a2a30;
+  --text: #f3efe7;
+  --muted: #a3a09a;
+  --faint: #6f6c67;
+  --accent: #e8a33d;
+  --accent-strong: #f1b24f;
+  --accent-fg: #1d1406;
+  --accent-soft: rgb(232 163 61 / 0.14);
+  --danger: #ef6b5b;
+  --success: #5fbf86;
+  --shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 12px 32px -12px rgb(0 0 0 / 0.6);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f7f4ee;
+  --surface: #fdfbf7;
+  --elevated: #ffffff;
+  --hover: #efebe3;
+  --border: #e4ddd0;
+  --text: #1d1a16;
+  --muted: #6b655c;
+  --faint: #9a948a;
+  --accent: #c9811a;
+  --accent-strong: #b37014;
+  --accent-fg: #ffffff;
+  --accent-soft: rgb(201 129 26 / 0.12);
+  --danger: #c8442f;
+  --success: #2f8f5b;
+  --shadow: 0 1px 2px rgb(60 40 10 / 0.06), 0 12px 32px -16px rgb(60 40 10 / 0.25);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-elevated: var(--elevated);
+  --color-hover: var(--hover);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --shadow-panel: var(--shadow);
+  --font-sans: 'Inter Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Fraunces Variable', Georgia, serif;
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    overflow: hidden;
+  }
+
+  /* Text people may want to copy (paths, errors) opts back in. */
+  .selectable {
+    user-select: text;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  ::selection {
+    background: var(--accent-soft);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
