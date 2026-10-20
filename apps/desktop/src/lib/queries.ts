@@ -12,7 +12,7 @@ import {
   type PersonRef,
   type PersonUpdate,
   pickFolder,
-  type TimelineFilter,
+  type Query,
 } from './api'
 
 export const keys = {
@@ -20,7 +20,7 @@ export const keys = {
   stats: ['stats'] as const,
   sources: ['sources'] as const,
   timeline: ['timeline'] as const,
-  filteredTimeline: (f: TimelineFilter | null) => ['timeline', f] as const,
+  filteredTimeline: (q: Query | null) => ['timeline', q] as const,
   asset: (id: Id) => ['asset', id] as const,
   /** Everything that changes when faces are named or recognised. */
   people: ['people'] as const,
@@ -30,18 +30,35 @@ export const keys = {
   groups: ['people', 'groups'] as const,
   groupFaces: (id: Id) => ['people', 'group', id] as const,
   assetFaces: (id: Id) => ['people', 'asset', id] as const,
+  /** Everything that changes when places and trips are recomputed. */
+  places: ['places'] as const,
+  placeList: ['places', 'list'] as const,
+  trips: ['places', 'trips'] as const,
+  trip: (id: Id) => ['places', 'trip', id] as const,
+  home: ['places', 'home'] as const,
+  suggest: (text: string) => ['suggest', text] as const,
 }
 
-const noFilter = (f: TimelineFilter | null | undefined) => !f || f.people.length === 0
+/** True when the query filters nothing (so the plain timeline can be reused). */
+export function isEmptyQuery(q: Query | null | undefined) {
+  if (!q) return true
+  return !Object.entries(q).some(([, v]) => (Array.isArray(v) ? v.length > 0 : v != null && v !== false))
+}
+
+/** The user's local date as `YYYY-MM-DD`. */
+export function localToday() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 export const useAppInfo = () => useQuery({ queryKey: keys.appInfo, queryFn: api.appInfo, staleTime: Infinity })
 export const useStats = () => useQuery({ queryKey: keys.stats, queryFn: api.libraryStats })
 export const useSources = () => useQuery({ queryKey: keys.sources, queryFn: api.listSources })
-export const useTimeline = (filter?: TimelineFilter | null) => {
-  const f = noFilter(filter) ? null : filter!
+export const useTimeline = (query?: Query | null) => {
+  const q = isEmptyQuery(query) ? null : query!
   return useQuery({
-    queryKey: keys.filteredTimeline(f),
-    queryFn: () => api.timeline(f),
+    queryKey: keys.filteredTimeline(q),
+    queryFn: () => api.timeline(q),
     placeholderData: (prev) => prev,
     staleTime: 60_000,
   })
@@ -59,6 +76,18 @@ export const usePersonFaces = (id: Id, suggestions: boolean) =>
   useQuery({ queryKey: keys.personFaces(id, suggestions), queryFn: () => api.personFaces(id, suggestions) })
 export const useAssetFaces = (id: Id | null) =>
   useQuery({ queryKey: keys.assetFaces(id ?? -1), queryFn: () => api.assetFaces(id!), enabled: id != null })
+
+export const useSuggest = (text: string) =>
+  useQuery({
+    queryKey: keys.suggest(text),
+    queryFn: () => api.suggest(text, localToday()),
+    placeholderData: (prev) => prev,
+    staleTime: 10_000,
+  })
+export const usePlaces = () => useQuery({ queryKey: keys.placeList, queryFn: api.places, staleTime: 60_000 })
+export const useTrips = () => useQuery({ queryKey: keys.trips, queryFn: api.trips, staleTime: 60_000 })
+export const useTrip = (id: Id) => useQuery({ queryKey: keys.trip(id), queryFn: () => api.trip(id) })
+export const useHome = () => useQuery({ queryKey: keys.home, queryFn: api.home, staleTime: 60_000 })
 
 /** Current indexing status (kept fresh by `useIndexStatusSync` in the app shell). */
 export const useIndexStatus = () => useIndexStore((s) => s.status)
@@ -85,6 +114,11 @@ export function useIndexStatusSync() {
     const onStatus = (s: IndexStatus) => {
       const prev = useIndexStore.getState().status
       useIndexStore.setState({ status: s })
+      if (s.placesGeneration !== prev.placesGeneration) {
+        qc.invalidateQueries({ queryKey: keys.places })
+        qc.invalidateQueries({ queryKey: ['suggest'] })
+        qc.invalidateQueries({ queryKey: keys.timeline, predicate: (q) => q.queryKey[1] != null })
+      }
       if (s.peopleGeneration !== prev.peopleGeneration) {
         qc.invalidateQueries({ queryKey: keys.people })
         // Filtered timelines depend on who was recognised.
@@ -193,6 +227,18 @@ export const useMergePeople = () =>
 export const useDeletePerson = () => usePeopleMutation((id: Id) => api.deletePerson(id), "Couldn't remove that person")
 export const useSetCoverFace = () =>
   usePeopleMutation(({ person, face }: { person: Id; face: Id }) => api.setCoverFace(person, face), "Couldn't change the photo")
+
+export function useRenameTrip() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, title }: { id: Id; title: string }) => api.renameTrip(id, title),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.places })
+      qc.invalidateQueries({ queryKey: ['suggest'] })
+    },
+    onError: (e) => toast.error("Couldn't rename that trip", errorText(e)),
+  })
+}
 
 export function useRescan() {
   return useMutation({

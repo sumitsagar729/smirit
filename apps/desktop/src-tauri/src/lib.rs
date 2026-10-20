@@ -13,6 +13,8 @@ use tauri::{Manager, RunEvent};
 pub struct AppState {
     pub library: Arc<Library>,
     pub indexer: indexing::Indexer,
+    /// GeoNames and Natural Earth files (also served to the map).
+    pub geo_dir: Option<std::path::PathBuf>,
 }
 
 /// Builds the typed command set; also used to export TypeScript bindings.
@@ -43,6 +45,12 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::merge_people,
             commands::delete_person,
             commands::set_cover_face,
+            commands::suggest,
+            commands::places,
+            commands::trips,
+            commands::trip,
+            commands::rename_trip,
+            commands::home,
         ])
         .typ::<indexing::IndexStatus>()
 }
@@ -87,8 +95,22 @@ pub fn run() {
                     tracing::warn!("face models not found; people features are off");
                 }
             }
-            let indexer = indexing::Indexer::start(app.handle().clone(), library.clone());
-            app.manage(AppState { library, indexer });
+            let geo_dir = smriti_core::geo::find_data_dir(
+                &app.path()
+                    .resource_dir()
+                    .map(|d| d.join("geo"))
+                    .into_iter()
+                    .chain(
+                        cfg!(debug_assertions)
+                            .then(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../data")),
+                    )
+                    .collect::<Vec<_>>(),
+            );
+            if geo_dir.is_none() {
+                tracing::warn!("geodata not found; places and the map are off");
+            }
+            let indexer = indexing::Indexer::start(app.handle().clone(), library.clone(), geo_dir.clone());
+            app.manage(AppState { library, indexer, geo_dir });
             Ok(())
         })
         .build(tauri::generate_context!())

@@ -11,3 +11,6 @@ coverage/
 
 # Face models (fetched by scripts/fetch-models.ps1)
 models/*.onnx
+
+# Geodata (fetched by scripts/fetch-data.ps1)
+data/

@@ -3,17 +3,24 @@ import {
   type AppInfo,
   type AssetDetail,
   type AssetFace,
+  type Chip,
   commands,
   type FaceGroup,
   type FaceRef,
+  type Home,
   type Id,
   type IndexStatus,
   type LibraryStats,
   type Person,
   type PersonRef,
   type PersonUpdate,
+  type PlaceSummary,
+  type Query,
   type Source,
+  type Stop,
+  type Suggestion,
   type Tile,
+  type Trip,
 } from './bindings'
 import { mock } from './mock'
 
@@ -22,20 +29,24 @@ export type {
   AppInfo,
   AssetDetail,
   AssetFace,
+  Chip,
   FaceGroup,
   FaceRef,
+  Home,
   Id,
   IndexStatus,
   LibraryStats,
   Person,
   PersonRef,
   PersonUpdate,
+  PlaceSummary,
+  Query,
   Source,
+  Stop,
+  Suggestion,
   Tile,
+  Trip,
 }
-
-/** Photos with all of `people`; with `only`, nobody else in them. */
-export type TimelineFilter = { people: Id[]; only: boolean }
 
 /** Thrown for any failed command; `code` is stable, `message` is human-readable. */
 export class CommandError extends Error {
@@ -65,7 +76,7 @@ const real = {
   removeSource: (id: Id) => unwrap(commands.removeSource(id)),
   rescan: () => commands.rescan(),
   indexStatus: () => commands.indexStatus(),
-  timeline: (filter: TimelineFilter | null) => unwrap(commands.timeline(filter)),
+  timeline: (query: Query | null) => unwrap(commands.timeline(query)),
   assetDetail: (id: Id) => unwrap(commands.assetDetail(id)),
   people: () => unwrap(commands.people()),
   person: (id: Id) => unwrap(commands.person(id)),
@@ -82,6 +93,12 @@ const real = {
   mergePeople: (from: Id, into: Id) => unwrap(commands.mergePeople(from, into)),
   deletePerson: (id: Id) => unwrap(commands.deletePerson(id)),
   setCoverFace: (person: Id, face: Id) => unwrap(commands.setCoverFace(person, face)),
+  suggest: (text: string, today: string) => unwrap(commands.suggest(text, today)),
+  places: () => unwrap(commands.places()),
+  trips: () => unwrap(commands.trips()),
+  trip: (id: Id) => unwrap(commands.trip(id)),
+  renameTrip: (id: Id, title: string) => unwrap(commands.renameTrip(id, title)),
+  home: () => unwrap(commands.home()),
 }
 
 export type Api = typeof real
@@ -116,3 +133,5 @@ const base = isWindows ? 'http://smriti.localhost' : 'smriti://localhost'
 export const thumbUrl = (id: Id) => `${base}/thumb/${id}`
 export const mediaUrl = (id: Id) => `${base}/media/${id}`
 export const faceUrl = (id: Id) => `${base}/face/${id}`
+/** Map outlines (Natural Earth): `countries` or `states`. */
+export const geoUrl = (name: 'countries' | 'states') => (inTauri ? `${base}/geo/${name}` : `/geo/${name}`)

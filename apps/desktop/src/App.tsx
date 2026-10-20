@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react'
+import { useEffect } from 'react'
 
 import { Sidebar } from './components/Sidebar'
 import { Toaster } from './components/Toaster'
@@ -9,6 +10,9 @@ import { ComingSoonView } from './views/ComingSoonView'
 import { FoldersView } from './views/FoldersView'
 import { PeopleView } from './views/PeopleView'
 import { PersonView } from './views/PersonView'
+import { PlacesView } from './views/PlacesView'
+import { SearchView } from './views/SearchView'
+import { TripView } from './views/TripView'
 import { SettingsView } from './views/SettingsView'
 import { TimelineView } from './views/TimelineView'
 
@@ -20,8 +24,12 @@ function CurrentView({ view }: { view: View }) {
       return <PeopleView />
     case 'person':
       return <PersonView />
+    case 'search':
+      return <SearchView />
     case 'places':
-      return <ComingSoonView feature="places" />
+      return <PlacesView />
+    case 'trip':
+      return <TripView />
     case 'albums':
       return <ComingSoonView feature="albums" />
     case 'folders':
@@ -34,6 +42,20 @@ function CurrentView({ view }: { view: View }) {
 export function App() {
   const view = useNav((s) => s.view)
   const personId = useNav((s) => s.personId)
+  const tripId = useNav((s) => s.tripId)
+  const go = useNav((s) => s.go)
+
+  // Ctrl/Cmd+K opens search from anywhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        go('search')
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [go])
   useIndexStatusSync()
   return (
     <div className="flex h-full bg-bg">
@@ -41,7 +63,7 @@ export function App() {
       <main className="relative min-w-0 flex-1">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            key={view === 'person' ? `person-${personId}` : view}
+            key={view === 'person' ? `person-${personId}` : view === 'trip' ? `trip-${tripId}` : view}
             className="h-full"
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}

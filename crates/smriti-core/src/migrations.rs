@@ -11,6 +11,7 @@ const STEPS: &[&str] = &[
     include_str!("../migrations/0001_initial.sql"),
     include_str!("../migrations/0002_thumbs.sql"),
     include_str!("../migrations/0003_faces.sql"),
+    include_str!("../migrations/0004_places.sql"),
 ];
 
 pub fn latest_version() -> u32 {

@@ -4,7 +4,8 @@
 use serde::Serialize;
 use smriti_core::timeline::{AssetDetail, Tile};
 use smriti_core::{
-    AssetFace, FaceGroup, FaceRef, Id, LibraryStats, Person, PersonRef, PersonUpdate, Source, TimelineFilter,
+    AssetFace, FaceGroup, FaceRef, Home, Id, LibraryStats, Person, PersonRef, PersonUpdate, PlaceSummary, Query,
+    Source, Suggestion, Trip,
 };
 use tauri::State;
 
@@ -89,8 +90,47 @@ pub fn index_status(state: State<'_, AppState>) -> IndexStatus {
 /// never waits on the database.
 #[tauri::command]
 #[specta::specta]
-pub async fn timeline(state: State<'_, AppState>, filter: Option<TimelineFilter>) -> ApiResult<Vec<Tile>> {
-    Ok(state.library.timeline(filter.as_ref())?)
+pub async fn timeline(state: State<'_, AppState>, query: Option<Query>) -> ApiResult<Vec<Tile>> {
+    Ok(state.library.timeline(query.as_ref())?)
+}
+
+// ---- Search and places --------------------------------------------------
+
+/// Chips for the words typed so far. `today` is the user's local date (`YYYY-MM-DD`).
+#[tauri::command]
+#[specta::specta]
+pub async fn suggest(state: State<'_, AppState>, text: String, today: String) -> ApiResult<Vec<Suggestion>> {
+    Ok(state.library.suggest(&text, &today)?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn places(state: State<'_, AppState>) -> ApiResult<Vec<PlaceSummary>> {
+    Ok(state.library.places()?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn trips(state: State<'_, AppState>) -> ApiResult<Vec<Trip>> {
+    Ok(state.library.trips()?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn trip(state: State<'_, AppState>, id: Id) -> ApiResult<Trip> {
+    Ok(state.library.trip(id)?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn rename_trip(state: State<'_, AppState>, id: Id, title: String) -> ApiResult<()> {
+    Ok(state.library.rename_trip(id, &title)?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn home(state: State<'_, AppState>) -> ApiResult<Option<Home>> {
+    Ok(state.library.home()?)
 }
 
 // ---- People ---------------------------------------------------------------

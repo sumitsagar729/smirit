@@ -1,7 +1,7 @@
 // In-memory stand-in for the Rust core so every screen can be developed and
 // reviewed in a plain browser. Never used inside the desktop app.
 import type { Api } from './api'
-import type { ApiError, FaceGroup, FaceRef, Person, Source, Tile } from './bindings'
+import type { ApiError, FaceGroup, FaceRef, Person, PlaceSummary, Source, Suggestion, Tile, Trip } from './bindings'
 
 class MockError extends Error {
   readonly code: string
@@ -40,6 +40,35 @@ function fakeTimeline(): Tile[] {
   return tiles
 }
 const tiles = fakeTimeline()
+
+// Places and trips around a Bengaluru home.
+const place = (id: number, name: string, admin1: string, lat: number, lon: number, count: number): PlaceSummary => ({
+  id,
+  name,
+  admin1,
+  country: 'India',
+  lat,
+  lon,
+  count,
+  coverAssetId: null,
+})
+const mockPlaces: PlaceSummary[] = [
+  place(1, 'Bengaluru', 'Karnataka', 12.97, 77.59, 4216),
+  place(2, 'Ooty', 'Tamil Nadu', 11.41, 76.7, 1062),
+  place(3, 'Coorg', 'Karnataka', 12.42, 75.74, 439),
+  place(4, 'Goa', 'Goa', 15.49, 73.83, 295),
+  place(5, 'Mysuru', 'Karnataka', 12.3, 76.65, 197),
+  place(6, 'Dhanbad', 'Jharkhand', 23.8, 86.43, 178),
+  place(7, 'Delhi', 'Delhi', 28.65, 77.23, 173),
+  place(8, 'Munnar', 'Kerala', 10.09, 77.06, 78),
+]
+const stop = (name: string, lat: number, lon: number, start: string, end: string, count: number) => ({ name, lat, lon, start, end, count })
+const mockTrips: Trip[] = [
+  { id: 11, title: 'Ooty', start: '2021-11-02', end: '2021-11-07', distanceKm: 198, stops: [stop('Vellore', 12.92, 79.13, '2021-11-02', '2021-11-02', 40), stop('Ooty', 11.41, 76.7, '2021-11-03', '2021-11-07', 900)], count: 2377, coverAssetId: null, userEdited: false },
+  { id: 12, title: 'Goa', start: '2021-10-09', end: '2021-10-12', distanceKm: 508, stops: [stop('Goa', 15.49, 73.83, '2021-10-09', '2021-10-12', 295)], count: 2533, coverAssetId: null, userEdited: false },
+  { id: 13, title: 'Dhanbad, Delhi & Jammu', start: '2018-04-18', end: '2018-05-11', distanceKm: 2224, stops: [stop('Dhanbad', 23.8, 86.43, '2018-04-18', '2018-04-25', 120), stop('Delhi', 28.65, 77.23, '2018-04-26', '2018-04-30', 90), stop('Jammu', 32.73, 74.86, '2018-05-01', '2018-05-08', 119)], count: 430, coverAssetId: null, userEdited: false },
+  { id: 14, title: 'Coorg', start: '2017-06-24', end: '2017-06-26', distanceKm: 219, stops: [stop('Coorg', 12.42, 75.74, '2017-06-24', '2017-06-26', 439)], count: 442, coverAssetId: null, userEdited: false },
+]
 
 // People: a few named, a few groups waiting for names. Face ids are fake, so
 // avatars show initials in the browser preview.
@@ -107,13 +136,47 @@ export const mock: Api = {
     return null
   },
   rescan: async () => {},
-  indexStatus: async () => ({ phase: 'idle', total: 0, done: 0, failed: 0, generation: 0, peopleGeneration: 0 }),
-  timeline: async (filter) => {
+  indexStatus: async () => ({ phase: 'idle', total: 0, done: 0, failed: 0, generation: 0, peopleGeneration: 0, placesGeneration: 0 }),
+  timeline: async (q) => {
     if (!sources.length) return []
-    if (!filter?.people.length) return tiles
-    // Fake but stable: each person "appears" in a slice of the library.
-    return tiles.filter((t) => filter.people.every((p) => (t.id * 31 + p * 17) % 5 < (filter.only ? 1 : 3)))
+    if (!q) return tiles
+    // Fake but stable: every filter keeps a slice of the library.
+    let out = tiles
+    for (const p of q.people ?? []) out = out.filter((t) => (t.id * 31 + p * 17) % 5 < (q.only ? 1 : 3))
+    if (q.kind) out = out.filter((t) => t.kind === q.kind)
+    if (q.from) out = out.filter((t) => (t.takenAt ?? '') >= q.from!)
+    if (q.to) out = out.filter((t) => (t.takenAt ?? '').slice(0, 10) <= q.to!)
+    if (q.place != null || q.trip != null) out = out.filter((t) => (t.id + (q.place ?? q.trip ?? 0)) % 7 === 0)
+    return out
   },
+  suggest: async (text) => {
+    const t = text.trim().toLowerCase()
+    const all: Suggestion[] = [
+      ...people.map((p) => ({ chip: { type: 'person' as const, id: p.id, name: p.name, faceId: null }, label: p.name, detail: `${p.photoCount} photos` })),
+      ...mockPlaces.map((p) => ({ chip: { type: 'place' as const, id: p.id, name: p.name }, label: p.name, detail: `${p.admin1} · ${p.count} photos` })),
+      ...mockTrips.map((tr) => ({ chip: { type: 'trip' as const, id: tr.id, title: tr.title }, label: `${tr.title} trip`, detail: tr.start })),
+      { chip: { type: 'kind', kind: 'video' }, label: 'Videos', detail: null },
+      { chip: { type: 'onThisDay' }, label: 'On this day', detail: 'This date in past years' },
+      { chip: { type: 'only' }, label: 'No one else', detail: 'Only the chosen people in the photo' },
+    ]
+    if (/^(19|20)\d\d$/.test(t)) {
+      return [{ chip: { type: 'dates', from: `${t}-01-01`, to: `${t}-12-31`, label: t }, label: t, detail: 'Year' }]
+    }
+    return (t ? all.filter((s) => s.label.toLowerCase().includes(t)) : all.slice(0, 6)).slice(0, 8)
+  },
+  places: async () => (sources.length ? mockPlaces : []),
+  trips: async () => (sources.length ? mockTrips : []),
+  trip: async (id) => {
+    const t = mockTrips.find((x) => x.id === id)
+    if (!t) throw new MockError({ code: 'not_found', message: `not found: trip ${id}` })
+    return t
+  },
+  renameTrip: async (id, title) => {
+    const t = mockTrips.find((x) => x.id === id)
+    if (t) Object.assign(t, { title: title.trim(), userEdited: true })
+    return null
+  },
+  home: async () => (sources.length ? { name: 'Bengaluru', lat: 12.9, lon: 77.7, countryCode: 'IN' } : null),
   people: async () => (sources.length ? [...people] : []),
   person: async (id) => ({ ...findPerson(id) }),
   faceGroups: async (limit) => (sources.length ? groups.slice(0, limit) : []),

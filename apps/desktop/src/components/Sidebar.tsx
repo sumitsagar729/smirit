@@ -20,7 +20,8 @@ const manage: Item[] = [{ view: 'folders', label: 'Folders', icon: FolderOpen }]
 
 function NavButton({ item }: { item: Item }) {
   const { view, go } = useNav()
-  const active = view === item.view || (item.view === 'people' && view === 'person')
+  const active =
+    view === item.view || (item.view === 'people' && view === 'person') || (item.view === 'places' && view === 'trip')
   const Icon = item.icon
   return (
     <button
@@ -70,6 +71,8 @@ function LibraryStatus() {
       ? 'Checking folders…'
       : index.phase === 'recognizing'
         ? 'Recognising people…'
+        : index.phase === 'places'
+          ? 'Finding places and trips…'
         : `Indexing ${pct}%`
     : data?.sources
       ? 'Library up to date'
@@ -111,7 +114,11 @@ export function Sidebar() {
 
       <button
         type="button"
-        className="mt-5 flex h-9 items-center gap-2.5 rounded-lg border border-border bg-bg px-3 text-[13px] text-faint transition-colors hover:border-faint/40 hover:text-muted"
+        onClick={() => go('search')}
+        className={cn(
+          'mt-5 flex h-9 items-center gap-2.5 rounded-lg border bg-bg px-3 text-[13px] transition-colors',
+          view === 'search' ? 'border-accent/50 text-text' : 'border-border text-faint hover:border-faint/40 hover:text-muted',
+        )}
       >
         <Search size={15} />
         <span className="flex-1 truncate text-left whitespace-nowrap">Search</span>

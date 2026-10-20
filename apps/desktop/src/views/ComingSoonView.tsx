@@ -1,15 +1,9 @@
-import { BookImage, MapPinned } from 'lucide-react'
+import { BookImage } from 'lucide-react'
 
 import { IconHalo } from '../components/art'
 import { EmptyState } from '../components/ui/EmptyState'
 
 const content = {
-  places: {
-    icon: <MapPinned size={36} strokeWidth={1.6} />,
-    eyebrow: 'Milestone M3',
-    title: 'Every trip on one map',
-    body: 'Trips are found from photo locations and folder names, then shown as routes from home with their best photos.',
-  },
   albums: {
     icon: <BookImage size={36} strokeWidth={1.6} />,
     eyebrow: 'Version 1.0',

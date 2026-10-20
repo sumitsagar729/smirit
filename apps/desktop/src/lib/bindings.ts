@@ -18,12 +18,30 @@ export const commands = {
 	 *  Every visible photo and video, newest first. Async so the UI thread
 	 *  never waits on the database.
 	 */
-	timeline: (filter: {
+	timeline: (query: {
 	/**  Photos with all of these people... */
-	people: Id[],
-	/**  ...and, when set, no one else (clear faces of anyone not listed exclude a photo). */
-	only: boolean,
-} | null) => typedError<Tile[], ApiError>(__TAURI_INVOKE("timeline", { filter })),
+	people?: Id[],
+	/**  ...and at least one of these... */
+	anyPeople?: Id[],
+	/**  ...and none of these. */
+	without?: Id[],
+	/**  Nobody else clearly in the photo. */
+	only?: boolean,
+	/**  Inclusive `YYYY-MM-DD` bounds. */
+	from?: string | null,
+	to?: string | null,
+	/**  A child at an age, from their birth date. */
+	age?: AgeFilter | null,
+	/**  `MM-DD`: this day in every year. */
+	onThisDay?: string | null,
+	place?: Id | null,
+	admin1?: string | null,
+	country?: string | null,
+	trip?: Id | null,
+	/**  A folder path relative to its source, e.g. `ooty - nov 2021`. */
+	folder?: string | null,
+	kind?: Kind | null,
+} | null) => typedError<Tile[], ApiError>(__TAURI_INVOKE("timeline", { query })),
 	assetDetail: (id: Id) => typedError<AssetDetail, ApiError>(__TAURI_INVOKE("asset_detail", { id })),
 	people: () => typedError<Person[], ApiError>(__TAURI_INVOKE("people")),
 	person: (id: Id) => typedError<Person, ApiError>(__TAURI_INVOKE("person", { id })),
@@ -40,9 +58,28 @@ export const commands = {
 	mergePeople: (from: Id, into: Id) => typedError<null, ApiError>(__TAURI_INVOKE("merge_people", { from, into })),
 	deletePerson: (id: Id) => typedError<null, ApiError>(__TAURI_INVOKE("delete_person", { id })),
 	setCoverFace: (person: Id, face: Id) => typedError<null, ApiError>(__TAURI_INVOKE("set_cover_face", { person, face })),
+	/**  Chips for the words typed so far. `today` is the user's local date (`YYYY-MM-DD`). */
+	suggest: (text: string, today: string) => typedError<Suggestion[], ApiError>(__TAURI_INVOKE("suggest", { text, today })),
+	places: () => typedError<PlaceSummary[], ApiError>(__TAURI_INVOKE("places")),
+	trips: () => typedError<Trip[], ApiError>(__TAURI_INVOKE("trips")),
+	trip: (id: Id) => typedError<Trip, ApiError>(__TAURI_INVOKE("trip", { id })),
+	renameTrip: (id: Id, title: string) => typedError<null, ApiError>(__TAURI_INVOKE("rename_trip", { id, title })),
+	home: () => typedError<{
+	name: string,
+	lat: number | null,
+	lon: number | null,
+	countryCode: string,
+} | null, ApiError>(__TAURI_INVOKE("home")),
 };
 
 /* Types */
+export type AgeFilter = {
+	person: Id,
+	/**  Age in whole months: from (inclusive) to (exclusive). */
+	fromMonths: number,
+	toMonths: number,
+};
+
 export type ApiError = {
 	code: string,
 	message: string,
@@ -82,6 +119,9 @@ export type AssetFace = {
 	confirmed: boolean,
 };
 
+/**  One search chip. */
+export type Chip = { type: "person"; id: Id; name: string; faceId: Id | null } | { type: "place"; id: Id; name: string } | { type: "region"; admin1: string } | { type: "country"; country: string } | { type: "trip"; id: Id; title: string } | { type: "dates"; from: string; to: string; label: string } | { type: "age"; person: Id; fromMonths: number; toMonths: number; label: string } | { type: "onThisDay" } | { type: "folder"; path: string } | { type: "kind"; kind: Kind } | { type: "only" };
+
 /**  Unnamed faces that look alike. */
 export type FaceGroup = {
 	id: Id,
@@ -100,6 +140,13 @@ export type FaceRef = {
 	takenAt: string | null,
 };
 
+export type Home = {
+	name: string,
+	lat: number | null,
+	lon: number | null,
+	countryCode: string,
+};
+
 /**
  *  Database row id. SQLite rowids are `i64`, but ours stay far below 2^53,
  *  so the UI receives them as plain JavaScript numbers without precision loss.
@@ -115,6 +162,8 @@ export type IndexStatus = {
 	generation: number,
 	/**  Bumped after recognition, so people screens refetch. */
 	peopleGeneration: number,
+	/**  Bumped after places and trips are recomputed. */
+	placesGeneration: number,
 };
 
 export type Kind = "photo" | "video";
@@ -152,7 +201,44 @@ export type PersonUpdate = {
 	isFamily: boolean,
 };
 
-export type Phase = "idle" | "scanning" | "indexing" | "recognizing";
+export type Phase = "idle" | "scanning" | "indexing" | "recognizing" | "places";
+
+export type PlaceSummary = {
+	id: Id,
+	name: string,
+	admin1: string | null,
+	country: string | null,
+	lat: number | null,
+	lon: number | null,
+	count: number,
+	coverAssetId: Id | null,
+};
+
+/**  Every filter the search bar can express. All parts must match. */
+export type Query = {
+	/**  Photos with all of these people... */
+	people?: Id[],
+	/**  ...and at least one of these... */
+	anyPeople?: Id[],
+	/**  ...and none of these. */
+	without?: Id[],
+	/**  Nobody else clearly in the photo. */
+	only?: boolean,
+	/**  Inclusive `YYYY-MM-DD` bounds. */
+	from?: string | null,
+	to?: string | null,
+	/**  A child at an age, from their birth date. */
+	age?: AgeFilter | null,
+	/**  `MM-DD`: this day in every year. */
+	onThisDay?: string | null,
+	place?: Id | null,
+	admin1?: string | null,
+	country?: string | null,
+	trip?: Id | null,
+	/**  A folder path relative to its source, e.g. `ooty - nov 2021`. */
+	folder?: string | null,
+	kind?: Kind | null,
+};
 
 export type Source = {
 	id: Id,
@@ -162,6 +248,22 @@ export type Source = {
 	lastScanAt: string | null,
 	photos: number,
 	videos: number,
+};
+
+export type Stop = {
+	name: string,
+	lat: number | null,
+	lon: number | null,
+	start: string,
+	end: string,
+	count: number,
+};
+
+export type Suggestion = {
+	chip: Chip,
+	label: string,
+	/**  Secondary text, e.g. "Tamil Nadu, India · 412 photos". */
+	detail: string | null,
 };
 
 /**
@@ -180,12 +282,17 @@ export type Tile = {
 	hasThumb: boolean,
 };
 
-/**  Narrows the timeline to photos of certain people. */
-export type TimelineFilter = {
-	/**  Photos with all of these people... */
-	people: Id[],
-	/**  ...and, when set, no one else (clear faces of anyone not listed exclude a photo). */
-	only: boolean,
+export type Trip = {
+	id: Id,
+	title: string,
+	/**  `YYYY-MM-DD`, inclusive. */
+	start: string,
+	end: string,
+	distanceKm: number | null,
+	stops: Stop[],
+	count: number,
+	coverAssetId: Id | null,
+	userEdited: boolean,
 };
 
 /* Tauri Specta runtime */

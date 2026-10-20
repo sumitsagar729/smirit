@@ -56,7 +56,8 @@
       }
     },
     "resources": {
-      "../../../models/*.onnx": "models/"
+      "../../../models/*.onnx": "models/",
+      "../../../data/*": "geo/"
     }
   }
 }

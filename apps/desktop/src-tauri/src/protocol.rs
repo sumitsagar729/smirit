@@ -4,6 +4,7 @@
 //!   smriti://localhost/thumb/<id>   WebP thumbnail
 //!   smriti://localhost/media/<id>   original file, with HTTP Range for video seeking
 //!   smriti://localhost/face/<id>    square face crop (WebP)
+//!   smriti://localhost/geo/<name>   map outlines: `countries` or `states` (GeoJSON)
 //!
 //! (On Windows the webview addresses it as `http://smriti.localhost/...`.)
 
@@ -21,6 +22,9 @@ const MAX_CHUNK: u64 = 4 * 1024 * 1024;
 pub fn handle<R: Runtime>(app: &AppHandle<R>, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
     let Some(state) = app.try_state::<AppState>() else { return status(StatusCode::SERVICE_UNAVAILABLE) };
     let path = req.uri().path().trim_start_matches('/');
+    if let Some(name) = path.strip_prefix("geo/") {
+        return geo(state.geo_dir.as_deref(), name);
+    }
     let (kind, id) = match path.split_once('/') {
         Some((k, id)) => (k, id.parse::<i64>().ok().map(Id)),
         None => (path, None),
@@ -93,6 +97,23 @@ fn serve_file(path: &std::path::Path, mime: &str, range: Option<&str>) -> std::i
         }
     };
     Ok(response.expect("valid response"))
+}
+
+/// Only these two files, by name, so the path can't wander.
+fn geo(dir: Option<&std::path::Path>, name: &str) -> Response<Vec<u8>> {
+    let file = match name {
+        "countries" => "ne_50m_admin_0_countries.geojson",
+        "states" => "ne_50m_admin_1_states_provinces.geojson",
+        _ => return status(StatusCode::NOT_FOUND),
+    };
+    match dir.map(|d| std::fs::read(d.join(file))) {
+        Some(Ok(bytes)) => Response::builder()
+            .header(header::CONTENT_TYPE, "application/geo+json")
+            .header(header::CACHE_CONTROL, "max-age=86400")
+            .body(bytes)
+            .unwrap_or_else(|_| status(StatusCode::INTERNAL_SERVER_ERROR)),
+        _ => status(StatusCode::NOT_FOUND),
+    }
 }
 
 fn status(code: StatusCode) -> Response<Vec<u8>> {

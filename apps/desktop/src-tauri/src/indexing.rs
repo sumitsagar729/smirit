@@ -1,12 +1,14 @@
 //! Runs scan, index and people recognition in the background and tells the
 //! UI how it's going.
 
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Sender, unbounded};
 use serde::Serialize;
+use smriti_core::geo::Geocoder;
 use smriti_core::{IndexProgress, Library};
 use tauri::{AppHandle, Emitter};
 
@@ -23,6 +25,7 @@ pub enum Phase {
     Scanning,
     Indexing,
     Recognizing,
+    Places,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, specta::Type)]
@@ -36,6 +39,8 @@ pub struct IndexStatus {
     pub generation: u32,
     /// Bumped after recognition, so people screens refetch.
     pub people_generation: u32,
+    /// Bumped after places and trips are recomputed.
+    pub places_generation: u32,
 }
 
 /// Applies a change to the shared status and tells the UI.
@@ -54,7 +59,7 @@ pub struct Indexer {
 }
 
 impl Indexer {
-    pub fn start(app: AppHandle, lib: Arc<Library>) -> Self {
+    pub fn start(app: AppHandle, lib: Arc<Library>, geo_dir: Option<PathBuf>) -> Self {
         let (wake, rx) = unbounded::<Wake>();
         let status = Arc::new(Mutex::new(IndexStatus {
             phase: Phase::Idle,
@@ -63,6 +68,7 @@ impl Indexer {
             failed: 0,
             generation: 0,
             people_generation: 0,
+            places_generation: 0,
         }));
         let cancel = Arc::new(AtomicBool::new(false));
         let workers = std::thread::available_parallelism().map_or(4, |n| n.get().saturating_sub(1).max(1));
@@ -72,6 +78,14 @@ impl Indexer {
         std::thread::Builder::new()
             .name("indexer".into())
             .spawn(move || {
+                // Loaded here so start-up isn't held up by parsing 34k towns.
+                let geo = geo_dir.and_then(|d| match Geocoder::load(&d) {
+                    Ok(g) => Some(g),
+                    Err(e) => {
+                        tracing::warn!(error = %e, "geodata could not be loaded; places are off");
+                        None
+                    }
+                });
                 let set = |f: &dyn Fn(&mut IndexStatus)| {
                     let snapshot = {
                         let mut s = st.lock().unwrap_or_else(|e| e.into_inner());
@@ -105,6 +119,16 @@ impl Indexer {
                             Err(e) => tracing::error!(error = %e, "scan failed"),
                         }
                         index_all(&lib, workers, &stop, &set, &recognize);
+                        // Cheap (about a second for 40k items), so after every rescan.
+                        if let Some(geo) = &geo
+                            && !stop.load(Ordering::Relaxed)
+                        {
+                            set(&|s| s.phase = Phase::Places);
+                            match lib.update_places(geo) {
+                                Ok(_) => set(&|s| s.places_generation += 1),
+                                Err(e) => tracing::error!(error = %e, "places update failed"),
+                            }
+                        }
                     } else {
                         recognize();
                     }

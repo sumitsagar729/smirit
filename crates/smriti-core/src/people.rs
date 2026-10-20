@@ -840,7 +840,9 @@ mod tests {
             )
             .unwrap();
         }
-        let count = |people: Vec<Id>, only| lib.timeline(Some(&crate::TimelineFilter { people, only })).unwrap().len();
+        let count = |people: Vec<Id>, only| {
+            lib.timeline(Some(&crate::Query { people, only, ..Default::default() })).unwrap().len()
+        };
         assert_eq!(count(vec![a], false), 2);
         assert_eq!(count(vec![a, b], false), 1);
         assert_eq!(count(vec![a, b], true), 0); // the stranger is in it
