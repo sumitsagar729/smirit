@@ -4,6 +4,7 @@
 //! the desktop shell's commands.
 
 pub mod error;
+pub mod faces;
 pub mod filename_date;
 pub mod id;
 pub mod indexer;
@@ -11,6 +12,7 @@ pub mod library;
 pub mod media;
 pub mod metadata;
 pub mod migrations;
+pub mod people;
 pub mod scan;
 pub mod sources;
 pub mod thumbs;
@@ -21,5 +23,7 @@ pub use id::Id;
 pub use indexer::IndexProgress;
 pub use library::{Library, LibraryStats};
 pub use media::Kind;
+pub use people::{AssetFace, FaceGroup, FaceRef, Person, PersonRef, PersonUpdate, RecognizeReport};
 pub use scan::ScanReport;
 pub use sources::Source;
+pub use timeline::TimelineFilter;

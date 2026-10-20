@@ -27,6 +27,9 @@ pub enum Error {
 
     #[error("not found: {0}")]
     NotFound(String),
+
+    #[error("{0}")]
+    Invalid(String),
 }
 
 impl Error {
@@ -41,6 +44,7 @@ impl Error {
             Error::SourceOverlaps { .. } => "source_overlaps",
             Error::SourceIsLibrary => "source_is_library",
             Error::NotFound(_) => "not_found",
+            Error::Invalid(_) => "invalid",
         }
     }
 }

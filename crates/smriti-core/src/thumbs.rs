@@ -38,6 +38,18 @@ pub fn make_photo(
     orientation: Option<u16>,
     dest: &Path,
 ) -> Result<(u32, u32), ThumbError> {
+    let img = decode_photo(src, data, THUMB_HEIGHT)?;
+    write(img, orientation.unwrap_or(1), dest)
+}
+
+/// Writes the thumbnail for an image that is already upright.
+pub fn write_oriented(img: RgbImage, dest: &Path) -> Result<(u32, u32), ThumbError> {
+    write(DynamicImage::ImageRgb8(img), 1, dest)
+}
+
+/// Decodes a photo with its short side at least `min_short` pixels where the
+/// format allows a cheaper reduced-size decode (JPEG), else at full size.
+pub fn decode_photo(src: &Path, data: Option<&[u8]>, min_short: u32) -> Result<DynamicImage, ThumbError> {
     let owned;
     let bytes = match data {
         Some(d) => d,
@@ -50,27 +62,26 @@ pub fn make_photo(
         .extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "jpg" | "jpeg" | "jfif"));
-    let img = match is_jpeg.then(|| decode_jpeg_scaled(bytes)).flatten() {
-        Some(img) => img,
+    match is_jpeg.then(|| decode_jpeg_scaled(bytes, min_short)).flatten() {
+        Some(img) => Ok(img),
         None => ImageReader::new(Cursor::new(bytes))
             .with_guessed_format()?
             .decode()
-            .map_err(|e| ThumbError::Decode(e.to_string()))?,
-    };
-    write(img, orientation.unwrap_or(1), dest)
+            .map_err(|e| ThumbError::Decode(e.to_string())),
+    }
 }
 
 /// JPEGs can be decoded straight at 1/2, 1/4 or 1/8 size by skipping DCT
 /// coefficients: a 12 MP phone photo decodes several times faster this way.
-/// Picks the smallest scale whose short side still covers the thumbnail.
+/// Picks the smallest scale whose short side still covers `min_short`.
 /// Returns None (caller falls back to a full decode) for anything unusual.
-fn decode_jpeg_scaled(bytes: &[u8]) -> Option<DynamicImage> {
+fn decode_jpeg_scaled(bytes: &[u8], min_short: u32) -> Option<DynamicImage> {
     use jpeg_decoder::{Decoder, PixelFormat};
     let mut d = Decoder::new(Cursor::new(bytes));
     d.read_info().ok()?;
     let info = d.info()?;
     let (w, h) = (info.width as f64, info.height as f64);
-    let f = (THUMB_HEIGHT as f64 / w.min(h)).min(1.0);
+    let f = (min_short as f64 / w.min(h)).min(1.0);
     let (sw, sh) = d.scale((w * f).ceil() as u16, (h * f).ceil() as u16).ok()?;
     let px = d.decode().ok()?;
     match d.info()?.pixel_format {
@@ -147,7 +158,7 @@ fn write(img: DynamicImage, orientation: u16, dest: &Path) -> Result<(u32, u32),
 }
 
 /// Applies an EXIF orientation (1–8) to pixels.
-fn orient(img: DynamicImage, orientation: u16) -> DynamicImage {
+pub fn orient(img: DynamicImage, orientation: u16) -> DynamicImage {
     match orientation {
         2 => img.fliph(),
         3 => img.rotate180(),
@@ -203,7 +214,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let src = dir.path().join("big.jpg");
         RgbImage::from_fn(4000, 3000, |x, y| image::Rgb([(x % 256) as u8, (y % 256) as u8, 90])).save(&src).unwrap();
-        let img = decode_jpeg_scaled(&std::fs::read(&src).unwrap()).expect("baseline RGB JPEG decodes");
+        let img = decode_jpeg_scaled(&std::fs::read(&src).unwrap(), THUMB_HEIGHT).expect("baseline RGB JPEG decodes");
         // 1/4 scale (1000x750) is the smallest that keeps the short side >= 440.
         assert_eq!((img.width(), img.height()), (1000, 750));
         assert_eq!(make_photo(&src, None, None, &dir.path().join("big.webp")).unwrap(), (587, THUMB_HEIGHT));

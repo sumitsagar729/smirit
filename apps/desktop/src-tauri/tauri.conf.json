@@ -30,7 +30,10 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "msi"],
+    "targets": [
+      "nsis",
+      "msi"
+    ],
     "publisher": "Smriti",
     "category": "Photography",
     "shortDescription": "Private, offline family photo library",
@@ -44,11 +47,16 @@
       "icons/icon.ico"
     ],
     "windows": {
-      "webviewInstallMode": { "type": "embedBootstrapper" },
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
       "nsis": {
         "installMode": "currentUser",
         "displayLanguageSelector": false
       }
+    },
+    "resources": {
+      "../../../models/*.onnx": "models/"
     }
   }
 }

@@ -1,14 +1,15 @@
-﻿//! Read models for browsing: the timeline grid and the viewer's info panel.
+//! Read models for browsing: the timeline grid and the viewer's info panel.
 
 use std::path::{Path, PathBuf};
 
 use rusqlite::OptionalExtension;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
+use crate::people::ASSIGNED;
 use crate::{Error, Id, Kind, Library, Result};
 
 /// One grid cell. Kept tiny: the whole library is sent to the UI at once
-/// (36k tiles â‰ˆ 2 MB) so scrolling and the year scrubber never wait.
+/// (36k tiles, about 2 MB) so scrolling and the year scrubber never wait.
 #[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Tile {
@@ -43,15 +44,50 @@ pub struct AssetDetail {
     pub duration: Option<f32>,
 }
 
+/// Narrows the timeline to photos of certain people.
+#[derive(Debug, Clone, Default, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TimelineFilter {
+    /// Photos with all of these people...
+    pub people: Vec<Id>,
+    /// ...and, when set, no one else (clear faces of anyone not listed exclude a photo).
+    pub only: bool,
+}
+
+/// Faces at least this clear count as "someone else" for `only`; tiny
+/// faces in the background don't.
+const OTHER_FACE_QUALITY: f32 = 0.45;
+
 impl Library {
-    pub fn timeline(&self) -> Result<Vec<Tile>> {
-        let conn = self.read();
-        let mut stmt = conn.prepare_cached(
+    pub fn timeline(&self, filter: Option<&TimelineFilter>) -> Result<Vec<Tile>> {
+        let mut sql = String::from(
             "SELECT id, width, height, taken_at, kind, duration_ms, thumb_state = 'ok'
              FROM assets
-             WHERE status = 'active' AND is_hidden = 0
-             ORDER BY taken_at IS NULL, taken_at DESC, id DESC",
-        )?;
+             WHERE status = 'active' AND is_hidden = 0",
+        );
+        if let Some(f) = filter.filter(|f| !f.people.is_empty()) {
+            // Ids are integers, so formatting them into the SQL is safe.
+            let mut ids: Vec<i64> = f.people.iter().map(|p| p.0).collect();
+            ids.sort_unstable();
+            ids.dedup();
+            let list = ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+            sql += &format!(
+                " AND id IN (SELECT asset_id FROM faces WHERE person_id IN ({list}) AND {ASSIGNED}
+                             GROUP BY asset_id HAVING count(DISTINCT person_id) = {})",
+                ids.len()
+            );
+            if f.only {
+                sql += &format!(
+                    " AND NOT EXISTS (SELECT 1 FROM faces o WHERE o.asset_id = assets.id
+                         AND (o.assign_kind IS NULL OR o.assign_kind != 'rejected')
+                         AND (o.person_id IS NULL OR o.person_id NOT IN ({list}))
+                         AND (o.person_id IS NOT NULL OR o.quality >= {OTHER_FACE_QUALITY}))"
+                );
+            }
+        }
+        sql += " ORDER BY taken_at IS NULL, taken_at DESC, id DESC";
+        let conn = self.read();
+        let mut stmt = conn.prepare_cached(&sql)?;
         let tiles = stmt
             .query_map([], |r| {
                 let w: Option<u32> = r.get(1)?;

@@ -29,6 +29,8 @@ xxhash-rust = { version = "0.8", features = ["xxh3"] }
 imagesize = "0.14"
 jpeg-decoder = { version = "0.3", default-features = false }
 bytes = "1"
+ort = "=2.0.0-rc.15"
+rayon = "1"
 
 [dev-dependencies]
 tempfile.workspace = true

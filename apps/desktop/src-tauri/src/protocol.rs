@@ -3,13 +3,14 @@
 //!
 //!   smriti://localhost/thumb/<id>   WebP thumbnail
 //!   smriti://localhost/media/<id>   original file, with HTTP Range for video seeking
+//!   smriti://localhost/face/<id>    square face crop (WebP)
 //!
 //! (On Windows the webview addresses it as `http://smriti.localhost/...`.)
 
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 
-use smriti_core::{Id, thumbs};
+use smriti_core::{Id, faces, thumbs};
 use tauri::http::{Request, Response, StatusCode, header};
 use tauri::{AppHandle, Manager, Runtime};
 
@@ -27,8 +28,12 @@ pub fn handle<R: Runtime>(app: &AppHandle<R>, req: Request<Vec<u8>>) -> Response
     let Some(id) = id else { return status(StatusCode::BAD_REQUEST) };
 
     match kind {
-        "thumb" => {
-            let p = thumbs::thumb_path(&state.library.thumbs_dir(), id);
+        "thumb" | "face" => {
+            let p = if kind == "thumb" {
+                thumbs::thumb_path(&state.library.thumbs_dir(), id)
+            } else {
+                faces::crop_path(&state.library.faces_dir(), id)
+            };
             match std::fs::read(&p) {
                 Ok(bytes) => Response::builder()
                     .header(header::CONTENT_TYPE, "image/webp")

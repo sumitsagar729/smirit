@@ -43,6 +43,9 @@ fn main() -> anyhow::Result<()> {
     let p = lib.run_index(workers, &cancel, &report)?;
     let secs = t.elapsed().as_secs_f32();
     println!("index: {p:?} in {secs:.0}s ({:.1}/s, {workers} workers)", (p.done + p.failed) as f32 / secs.max(0.1));
+    if lib.models_dir().is_some() {
+        println!("{:?}", lib.recognize()?);
+    }
     println!("{:?}", lib.stats()?);
     Ok(())
 }

@@ -7,7 +7,11 @@ use rusqlite_migration::{M, Migrations};
 pub static MIGRATIONS: LazyLock<Migrations<'static>> =
     LazyLock::new(|| Migrations::new(STEPS.iter().map(|sql| M::up(sql)).collect()));
 
-const STEPS: &[&str] = &[include_str!("../migrations/0001_initial.sql"), include_str!("../migrations/0002_thumbs.sql")];
+const STEPS: &[&str] = &[
+    include_str!("../migrations/0001_initial.sql"),
+    include_str!("../migrations/0002_thumbs.sql"),
+    include_str!("../migrations/0003_faces.sql"),
+];
 
 pub fn latest_version() -> u32 {
     STEPS.len() as u32

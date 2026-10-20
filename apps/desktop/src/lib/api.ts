@@ -2,16 +2,40 @@ import {
   type ApiError,
   type AppInfo,
   type AssetDetail,
+  type AssetFace,
   commands,
+  type FaceGroup,
+  type FaceRef,
   type Id,
   type IndexStatus,
   type LibraryStats,
+  type Person,
+  type PersonRef,
+  type PersonUpdate,
   type Source,
   type Tile,
 } from './bindings'
 import { mock } from './mock'
 
-export type { ApiError, AppInfo, AssetDetail, Id, IndexStatus, LibraryStats, Source, Tile }
+export type {
+  ApiError,
+  AppInfo,
+  AssetDetail,
+  AssetFace,
+  FaceGroup,
+  FaceRef,
+  Id,
+  IndexStatus,
+  LibraryStats,
+  Person,
+  PersonRef,
+  PersonUpdate,
+  Source,
+  Tile,
+}
+
+/** Photos with all of `people`; with `only`, nobody else in them. */
+export type TimelineFilter = { people: Id[]; only: boolean }
 
 /** Thrown for any failed command; `code` is stable, `message` is human-readable. */
 export class CommandError extends Error {
@@ -41,8 +65,23 @@ const real = {
   removeSource: (id: Id) => unwrap(commands.removeSource(id)),
   rescan: () => commands.rescan(),
   indexStatus: () => commands.indexStatus(),
-  timeline: () => unwrap(commands.timeline()),
+  timeline: (filter: TimelineFilter | null) => unwrap(commands.timeline(filter)),
   assetDetail: (id: Id) => unwrap(commands.assetDetail(id)),
+  people: () => unwrap(commands.people()),
+  person: (id: Id) => unwrap(commands.person(id)),
+  faceGroups: (limit: number) => unwrap(commands.faceGroups(limit)),
+  groupFaces: (group: Id) => unwrap(commands.groupFaces(group)),
+  personFaces: (person: Id, suggestions: boolean) => unwrap(commands.personFaces(person, suggestions)),
+  assetFaces: (asset: Id) => unwrap(commands.assetFaces(asset)),
+  nameGroup: (group: Id, to: PersonRef) => unwrap(commands.nameGroup(group, to)),
+  assignFaces: (faces: Id[], to: PersonRef) => unwrap(commands.assignFaces(faces, to)),
+  rejectFaces: (faces: Id[]) => unwrap(commands.rejectFaces(faces)),
+  ignoreFaces: (faces: Id[]) => unwrap(commands.ignoreFaces(faces)),
+  ignoreGroup: (group: Id) => unwrap(commands.ignoreGroup(group)),
+  updatePerson: (id: Id, update: PersonUpdate) => unwrap(commands.updatePerson(id, update)),
+  mergePeople: (from: Id, into: Id) => unwrap(commands.mergePeople(from, into)),
+  deletePerson: (id: Id) => unwrap(commands.deletePerson(id)),
+  setCoverFace: (person: Id, face: Id) => unwrap(commands.setCoverFace(person, face)),
 }
 
 export type Api = typeof real
@@ -76,3 +115,4 @@ const base = isWindows ? 'http://smriti.localhost' : 'smriti://localhost'
 
 export const thumbUrl = (id: Id) => `${base}/thumb/${id}`
 export const mediaUrl = (id: Id) => `${base}/media/${id}`
+export const faceUrl = (id: Id) => `${base}/face/${id}`

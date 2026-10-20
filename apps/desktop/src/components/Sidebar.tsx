@@ -20,7 +20,7 @@ const manage: Item[] = [{ view: 'folders', label: 'Folders', icon: FolderOpen }]
 
 function NavButton({ item }: { item: Item }) {
   const { view, go } = useNav()
-  const active = view === item.view
+  const active = view === item.view || (item.view === 'people' && view === 'person')
   const Icon = item.icon
   return (
     <button
@@ -68,7 +68,9 @@ function LibraryStatus() {
   const title = busy
     ? index.phase === 'scanning'
       ? 'Checking folders…'
-      : `Indexing ${pct}%`
+      : index.phase === 'recognizing'
+        ? 'Recognising people…'
+        : `Indexing ${pct}%`
     : data?.sources
       ? 'Library up to date'
       : 'No folders yet'

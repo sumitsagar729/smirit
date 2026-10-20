@@ -1,12 +1,12 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Mutex, MutexGuard, RwLock};
 
 use rusqlite::{Connection, OpenFlags};
 use serde::Serialize;
 
 use crate::migrations::{MIGRATIONS, latest_version};
-use crate::{Result, thumbs};
+use crate::{Result, faces, thumbs};
 
 const DB_FILE: &str = "library.db";
 const SUBDIRS: [&str; 4] = ["thumbs", "faces", "models", "backups"];
@@ -21,6 +21,7 @@ pub struct Library {
     writer: Mutex<Connection>,
     reader: Mutex<Connection>,
     ffmpeg: Option<PathBuf>,
+    models: RwLock<Option<PathBuf>>,
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -65,8 +66,13 @@ impl Library {
         reader.busy_timeout(std::time::Duration::from_secs(5))?;
 
         let ffmpeg = thumbs::find_ffmpeg();
-        tracing::info!(root = %root.display(), from = current, to = latest_version(), ffmpeg = ?ffmpeg, "library opened");
-        Ok(Self { root, writer: Mutex::new(conn), reader: Mutex::new(reader), ffmpeg })
+        let models = std::env::var_os("SMRITI_MODELS")
+            .map(PathBuf::from)
+            .into_iter()
+            .chain([root.join("models")])
+            .find(|d| faces::model_paths(d).is_some());
+        tracing::info!(root = %root.display(), from = current, to = latest_version(), ffmpeg = ?ffmpeg, models = ?models, "library opened");
+        Ok(Self { root, writer: Mutex::new(conn), reader: Mutex::new(reader), ffmpeg, models: RwLock::new(models) })
     }
 
     pub fn root(&self) -> &Path {
@@ -75,6 +81,25 @@ impl Library {
 
     pub fn thumbs_dir(&self) -> PathBuf {
         self.root.join("thumbs")
+    }
+
+    pub fn faces_dir(&self) -> PathBuf {
+        self.root.join("faces")
+    }
+
+    /// Folder holding the face models, once they are available.
+    pub fn models_dir(&self) -> Option<PathBuf> {
+        self.models.read().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    /// Uses the face models in `dir` (for example the app's bundled copy).
+    /// Returns false when they are missing there.
+    pub fn use_models(&self, dir: &Path) -> bool {
+        let ok = faces::model_paths(dir).is_some();
+        if ok {
+            *self.models.write().unwrap_or_else(|e| e.into_inner()) = Some(dir.to_path_buf());
+        }
+        ok
     }
 
     pub fn ffmpeg(&self) -> Option<&Path> {

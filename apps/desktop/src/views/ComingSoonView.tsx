@@ -1,15 +1,9 @@
-import { BookImage, MapPinned, Users } from 'lucide-react'
+import { BookImage, MapPinned } from 'lucide-react'
 
 import { IconHalo } from '../components/art'
 import { EmptyState } from '../components/ui/EmptyState'
 
 const content = {
-  people: {
-    icon: <Users size={36} strokeWidth={1.6} />,
-    eyebrow: 'Milestone M2',
-    title: 'Everyone you love, recognised',
-    body: 'Smriti will group faces automatically and learn names in about a minute, including children as they grow from newborn to school age.',
-  },
   places: {
     icon: <MapPinned size={36} strokeWidth={1.6} />,
     eyebrow: 'Milestone M3',

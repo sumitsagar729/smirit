@@ -2,16 +2,22 @@ import { FolderPlus, Minus, Plus } from 'lucide-react'
 import { useState } from 'react'
 
 import { PhotoStack } from '../components/art'
+import { PeopleFilterBar } from '../components/people/PeopleFilterBar'
 import { TimelineGrid } from '../components/TimelineGrid'
 import { Button } from '../components/ui/Button'
 import { EmptyState } from '../components/ui/EmptyState'
-import { useAddFolder, useIndexStatus, useStats, useTimeline } from '../lib/queries'
+import { useAddFolder, useIndexStatus, usePeople, useStats, useTimeline } from '../lib/queries'
+import { usePeopleFilter } from '../state/peopleFilter'
 
 const SIZES = [140, 180, 220, 280, 360]
 
 export function TimelineView() {
   const { data: stats, isLoading: statsLoading } = useStats()
-  const { data: tiles = [], isLoading } = useTimeline()
+  const filterPeople = usePeopleFilter((s) => s.people)
+  const only = usePeopleFilter((s) => s.only)
+  const filtered = filterPeople.length > 0
+  const { data: tiles = [], isLoading } = useTimeline(filtered ? { people: filterPeople, only } : null)
+  const { data: people = [] } = usePeople()
   const index = useIndexStatus()
   const addFolder = useAddFolder()
   const [size, setSize] = useState(2)
@@ -42,7 +48,7 @@ export function TimelineView() {
     )
   }
 
-  if (!tiles.length) {
+  if (!tiles.length && !filtered) {
     const busy = index.phase !== 'idle'
     return (
       <div className="grid h-full place-items-center pb-16">
@@ -61,13 +67,24 @@ export function TimelineView() {
   }
 
   const total = (stats.photos + stats.videos).toLocaleString()
+  const names = filterPeople.map((id) => people.find((p) => p.id === id)?.name ?? 'someone')
+  const who =
+    names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
   return (
     <div className="flex h-full flex-col">
       <header className="flex shrink-0 items-end justify-between px-10 pt-8 pb-2">
         <div>
           <h1 className="font-display text-[34px] leading-none font-medium tracking-tight text-text">Timeline</h1>
           <p className="mt-2 text-[13.5px] text-muted">
-            {total} photos and videos
+            {filtered ? (
+              <>
+                {tiles.length.toLocaleString()} {tiles.length === 1 ? 'photo' : 'photos'} of {who}
+                {names.length > 1 && ' together'}
+                {only && ', no one else'}
+              </>
+            ) : (
+              <>{total} photos and videos</>
+            )}
             {index.phase === 'indexing' && ` · indexing ${index.done.toLocaleString()} of ${index.total.toLocaleString()}`}
           </p>
         </div>
@@ -76,8 +93,20 @@ export function TimelineView() {
           <Button size="sm" variant="ghost" aria-label="Larger" disabled={size === SIZES.length - 1} onClick={() => setSize(size + 1)} icon={<Plus size={15} />} />
         </div>
       </header>
+      <PeopleFilterBar />
       <div className="min-h-0 flex-1">
-        <TimelineGrid tiles={tiles} rowHeight={SIZES[size]} />
+        {tiles.length ? (
+          <TimelineGrid tiles={tiles} rowHeight={SIZES[size]} />
+        ) : (
+          <div className="grid h-full place-items-center pb-24 text-center">
+            <div>
+              <div className="text-[15px] text-text">No photos of {who}{only ? ' on their own' : ' together'} yet</div>
+              <div className="mt-1 text-[13.5px] text-muted">
+                {only ? 'Try turning off “No one else”.' : 'Try fewer people, or name more faces in People.'}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

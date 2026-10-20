@@ -18,8 +18,28 @@ export const commands = {
 	 *  Every visible photo and video, newest first. Async so the UI thread
 	 *  never waits on the database.
 	 */
-	timeline: () => typedError<Tile[], ApiError>(__TAURI_INVOKE("timeline")),
+	timeline: (filter: {
+	/**  Photos with all of these people... */
+	people: Id[],
+	/**  ...and, when set, no one else (clear faces of anyone not listed exclude a photo). */
+	only: boolean,
+} | null) => typedError<Tile[], ApiError>(__TAURI_INVOKE("timeline", { filter })),
 	assetDetail: (id: Id) => typedError<AssetDetail, ApiError>(__TAURI_INVOKE("asset_detail", { id })),
+	people: () => typedError<Person[], ApiError>(__TAURI_INVOKE("people")),
+	person: (id: Id) => typedError<Person, ApiError>(__TAURI_INVOKE("person", { id })),
+	faceGroups: (limit: number) => typedError<FaceGroup[], ApiError>(__TAURI_INVOKE("face_groups", { limit })),
+	groupFaces: (group: Id) => typedError<FaceRef[], ApiError>(__TAURI_INVOKE("group_faces", { group })),
+	personFaces: (person: Id, suggestions: boolean) => typedError<FaceRef[], ApiError>(__TAURI_INVOKE("person_faces", { person, suggestions })),
+	assetFaces: (asset: Id) => typedError<AssetFace[], ApiError>(__TAURI_INVOKE("asset_faces", { asset })),
+	nameGroup: (group: Id, to: PersonRef) => typedError<Id, ApiError>(__TAURI_INVOKE("name_group", { group, to })),
+	assignFaces: (faces: Id[], to: PersonRef) => typedError<Id, ApiError>(__TAURI_INVOKE("assign_faces", { faces, to })),
+	rejectFaces: (faces: Id[]) => typedError<null, ApiError>(__TAURI_INVOKE("reject_faces", { faces })),
+	ignoreFaces: (faces: Id[]) => typedError<null, ApiError>(__TAURI_INVOKE("ignore_faces", { faces })),
+	ignoreGroup: (group: Id) => typedError<null, ApiError>(__TAURI_INVOKE("ignore_group", { group })),
+	updatePerson: (id: Id, update: PersonUpdate) => typedError<null, ApiError>(__TAURI_INVOKE("update_person", { id, update })),
+	mergePeople: (from: Id, into: Id) => typedError<null, ApiError>(__TAURI_INVOKE("merge_people", { from, into })),
+	deletePerson: (id: Id) => typedError<null, ApiError>(__TAURI_INVOKE("delete_person", { id })),
+	setCoverFace: (person: Id, face: Id) => typedError<null, ApiError>(__TAURI_INVOKE("set_cover_face", { person, face })),
 };
 
 /* Types */
@@ -52,6 +72,34 @@ export type AssetDetail = {
 	duration: number | null,
 };
 
+/**  A face as drawn over a photo in the viewer. */
+export type AssetFace = {
+	id: Id,
+	/**  x, y, width, height as fractions of the upright photo. */
+	bbox: (number | null)[],
+	personId: Id | null,
+	personName: string | null,
+	confirmed: boolean,
+};
+
+/**  Unnamed faces that look alike. */
+export type FaceGroup = {
+	id: Id,
+	size: number,
+	/**  The clearest faces first. */
+	faceIds: Id[],
+};
+
+export type FaceRef = {
+	id: Id,
+	assetId: Id,
+	/**  "confirmed" (named by you) or "auto" (recognised). */
+	kind: string | null,
+	/**  Recognition confidence for "auto" faces. */
+	score: number | null,
+	takenAt: string | null,
+};
+
 /**
  *  Database row id. SQLite rowids are `i64`, but ours stay far below 2^53,
  *  so the UI receives them as plain JavaScript numbers without precision loss.
@@ -65,6 +113,8 @@ export type IndexStatus = {
 	failed: number,
 	/**  Bumped whenever new items became visible, so the UI knows to refetch. */
 	generation: number,
+	/**  Bumped after recognition, so people screens refetch. */
+	peopleGeneration: number,
 };
 
 export type Kind = "photo" | "video";
@@ -79,7 +129,30 @@ export type LibraryStats = {
 	pendingJobs: number,
 };
 
-export type Phase = "idle" | "scanning" | "indexing";
+export type Person = {
+	id: Id,
+	name: string,
+	/**  `YYYY-MM-DD`; lets recognition follow a child as they grow. */
+	birthDate: string | null,
+	isFamily: boolean,
+	coverFaceId: Id | null,
+	faceCount: number,
+	photoCount: number,
+};
+
+/**  Who to give faces to: an existing person, or a new one by name. */
+export type PersonRef = {
+	personId: Id | null,
+	name: string | null,
+};
+
+export type PersonUpdate = {
+	name: string,
+	birthDate: string | null,
+	isFamily: boolean,
+};
+
+export type Phase = "idle" | "scanning" | "indexing" | "recognizing";
 
 export type Source = {
 	id: Id,
@@ -93,7 +166,7 @@ export type Source = {
 
 /**
  *  One grid cell. Kept tiny: the whole library is sent to the UI at once
- *  (36k tiles â‰ˆ 2 MB) so scrolling and the year scrubber never wait.
+ *  (36k tiles, about 2 MB) so scrolling and the year scrubber never wait.
  */
 export type Tile = {
 	id: Id,
@@ -105,6 +178,14 @@ export type Tile = {
 	/**  Video length in seconds. */
 	duration: number | null,
 	hasThumb: boolean,
+};
+
+/**  Narrows the timeline to photos of certain people. */
+export type TimelineFilter = {
+	/**  Photos with all of these people... */
+	people: Id[],
+	/**  ...and, when set, no one else (clear faces of anyone not listed exclude a photo). */
+	only: boolean,
 };
 
 /* Tauri Specta runtime */

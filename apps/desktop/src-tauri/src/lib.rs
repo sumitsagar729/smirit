@@ -28,6 +28,21 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::index_status,
             commands::timeline,
             commands::asset_detail,
+            commands::people,
+            commands::person,
+            commands::face_groups,
+            commands::group_faces,
+            commands::person_faces,
+            commands::asset_faces,
+            commands::name_group,
+            commands::assign_faces,
+            commands::reject_faces,
+            commands::ignore_faces,
+            commands::ignore_group,
+            commands::update_person,
+            commands::merge_people,
+            commands::delete_person,
+            commands::set_cover_face,
         ])
         .typ::<indexing::IndexStatus>()
 }
@@ -63,6 +78,15 @@ pub fn run() {
         .setup(move |app| {
             builder.mount_events(app);
             let library = Arc::new(Library::open(&library_dir)?);
+            if library.models_dir().is_none() {
+                let bundled = app.path().resource_dir().map(|d| d.join("models")).ok();
+                // In development the models live in the repository.
+                let dev = cfg!(debug_assertions)
+                    .then(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../models"));
+                if !bundled.into_iter().chain(dev).any(|d| library.use_models(&d)) {
+                    tracing::warn!("face models not found; people features are off");
+                }
+            }
             let indexer = indexing::Indexer::start(app.handle().clone(), library.clone());
             app.manage(AppState { library, indexer });
             Ok(())

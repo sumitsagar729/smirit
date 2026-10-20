@@ -7,6 +7,8 @@ import { useIndexStatusSync } from './lib/queries'
 import { useNav, type View } from './state/nav'
 import { ComingSoonView } from './views/ComingSoonView'
 import { FoldersView } from './views/FoldersView'
+import { PeopleView } from './views/PeopleView'
+import { PersonView } from './views/PersonView'
 import { SettingsView } from './views/SettingsView'
 import { TimelineView } from './views/TimelineView'
 
@@ -15,7 +17,9 @@ function CurrentView({ view }: { view: View }) {
     case 'timeline':
       return <TimelineView />
     case 'people':
-      return <ComingSoonView feature="people" />
+      return <PeopleView />
+    case 'person':
+      return <PersonView />
     case 'places':
       return <ComingSoonView feature="places" />
     case 'albums':
@@ -29,6 +33,7 @@ function CurrentView({ view }: { view: View }) {
 
 export function App() {
   const view = useNav((s) => s.view)
+  const personId = useNav((s) => s.personId)
   useIndexStatusSync()
   return (
     <div className="flex h-full bg-bg">
@@ -36,7 +41,7 @@ export function App() {
       <main className="relative min-w-0 flex-1">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            key={view}
+            key={view === 'person' ? `person-${personId}` : view}
             className="h-full"
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}

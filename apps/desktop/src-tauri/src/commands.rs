@@ -3,7 +3,9 @@
 
 use serde::Serialize;
 use smriti_core::timeline::{AssetDetail, Tile};
-use smriti_core::{Id, LibraryStats, Source};
+use smriti_core::{
+    AssetFace, FaceGroup, FaceRef, Id, LibraryStats, Person, PersonRef, PersonUpdate, Source, TimelineFilter,
+};
 use tauri::State;
 
 use crate::AppState;
@@ -87,8 +89,119 @@ pub fn index_status(state: State<'_, AppState>) -> IndexStatus {
 /// never waits on the database.
 #[tauri::command]
 #[specta::specta]
-pub async fn timeline(state: State<'_, AppState>) -> ApiResult<Vec<Tile>> {
-    Ok(state.library.timeline()?)
+pub async fn timeline(state: State<'_, AppState>, filter: Option<TimelineFilter>) -> ApiResult<Vec<Tile>> {
+    Ok(state.library.timeline(filter.as_ref())?)
+}
+
+// ---- People ---------------------------------------------------------------
+// Changes run recognition again in the background; the UI refetches when
+// `IndexStatus.peopleGeneration` moves.
+
+#[tauri::command]
+#[specta::specta]
+pub async fn people(state: State<'_, AppState>) -> ApiResult<Vec<Person>> {
+    Ok(state.library.people()?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn person(state: State<'_, AppState>, id: Id) -> ApiResult<Person> {
+    Ok(state.library.person(id)?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn face_groups(state: State<'_, AppState>, limit: u32) -> ApiResult<Vec<FaceGroup>> {
+    Ok(state.library.face_groups(limit)?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn group_faces(state: State<'_, AppState>, group: Id) -> ApiResult<Vec<FaceRef>> {
+    Ok(state.library.group_faces(group)?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn person_faces(state: State<'_, AppState>, person: Id, suggestions: bool) -> ApiResult<Vec<FaceRef>> {
+    Ok(state.library.person_faces(person, suggestions)?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn asset_faces(state: State<'_, AppState>, asset: Id) -> ApiResult<Vec<AssetFace>> {
+    Ok(state.library.asset_faces(asset)?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn name_group(state: State<'_, AppState>, group: Id, to: PersonRef) -> ApiResult<Id> {
+    let id = state.library.name_group(group, &to)?;
+    state.indexer.recognize();
+    Ok(id)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn assign_faces(state: State<'_, AppState>, faces: Vec<Id>, to: PersonRef) -> ApiResult<Id> {
+    let id = state.library.assign_faces(&faces, &to)?;
+    state.indexer.recognize();
+    Ok(id)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn reject_faces(state: State<'_, AppState>, faces: Vec<Id>) -> ApiResult<()> {
+    state.library.reject_faces(&faces)?;
+    state.indexer.recognize();
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn ignore_faces(state: State<'_, AppState>, faces: Vec<Id>) -> ApiResult<()> {
+    state.library.ignore_faces(&faces)?;
+    state.indexer.recognize();
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn ignore_group(state: State<'_, AppState>, group: Id) -> ApiResult<()> {
+    state.library.ignore_group(group)?;
+    state.indexer.recognize();
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn update_person(state: State<'_, AppState>, id: Id, update: PersonUpdate) -> ApiResult<()> {
+    state.library.update_person(id, &update)?;
+    // A birth date changes age-aware matching.
+    state.indexer.recognize();
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn merge_people(state: State<'_, AppState>, from: Id, into: Id) -> ApiResult<()> {
+    state.library.merge_people(from, into)?;
+    state.indexer.recognize();
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_person(state: State<'_, AppState>, id: Id) -> ApiResult<()> {
+    state.library.delete_person(id)?;
+    state.indexer.recognize();
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn set_cover_face(state: State<'_, AppState>, person: Id, face: Id) -> ApiResult<()> {
+    Ok(state.library.set_cover_face(person, face)?)
 }
 
 #[tauri::command]

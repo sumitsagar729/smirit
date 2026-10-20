@@ -8,3 +8,6 @@ target/
 apps/desktop/src-tauri/gen/
 coverage/
 *.tsbuildinfo
+
+# Face models (fetched by scripts/fetch-models.ps1)
+models/*.onnx

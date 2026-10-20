@@ -8,6 +8,7 @@ import { cn } from '../lib/cn'
 import { formatBytes, formatDuration, formatLongDate as formatDate, formatTime } from '../lib/format'
 import { useAssetDetail } from '../lib/queries'
 import { useViewer } from '../state/viewer'
+import { PeopleInPhoto } from './people/PeopleInPhoto'
 
 const DATE_SOURCE: Record<string, string> = {
   exif: 'From the camera',
@@ -48,6 +49,7 @@ function InfoPanel({ d }: { d: AssetDetail }) {
             {formatTime(d.takenAt)} · {DATE_SOURCE[d.takenAtSource ?? ''] ?? 'Unknown source'}
           </>
         ))}
+        <PeopleInPhoto assetId={d.id} />
         {row(
           <FolderOpen size={16} />,
           <span className="selectable break-all">{d.fileName}</span>,
@@ -119,6 +121,8 @@ export function Viewer() {
   useEffect(() => {
     if (index == null) return
     const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return
       if (e.key === 'Escape') close()
       else if (e.key === 'ArrowRight') step(1)
       else if (e.key === 'ArrowLeft') step(-1)
